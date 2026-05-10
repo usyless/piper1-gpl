@@ -320,6 +320,7 @@ int Synthesizer::next(AudioChunk& chunk) {
     chunk.phonemes = this->chunk_phonemes;
 
     // Copy phoneme ids
+    this->chunk_phoneme_ids.reserve(next_ids.size());
     for (auto phoneme_id : next_ids) {
         if (phoneme_id < std::numeric_limits<int>::min() ||
             phoneme_id > std::numeric_limits<int>::max()) {
