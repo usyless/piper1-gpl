@@ -4,6 +4,7 @@
 #include <fstream>
 #include <limits>
 #include "json.hpp"
+#include "onnxruntime_cxx_api.h"
 #include <thread>
 
 #include <espeak-ng/speak_lib.h>
@@ -252,19 +253,20 @@ int Synthesizer::next(AudioChunk& chunk) {
                               this->options.noise_w_scale};
 
     std::vector<Ort::Value> input_tensors;
+    input_tensors.reserve((this->num_speakers > 1) ? 5 : 4);
     std::vector<int64_t> phoneme_ids_shape{1, (int64_t)next_ids.size()};
-    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+    input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
         memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
         phoneme_ids_shape.size()));
 
     std::vector<int64_t> phoneme_id_lengths_shape{
         (int64_t)phoneme_id_lengths.size()};
-    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+    input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
         memoryInfo, phoneme_id_lengths.data(), phoneme_id_lengths.size(),
         phoneme_id_lengths_shape.data(), phoneme_id_lengths_shape.size()));
 
     std::vector<int64_t> scales_shape{(int64_t)scales.size()};
-    input_tensors.push_back(Ort::Value::CreateTensor<float>(
+    input_tensors.emplace_back(Ort::Value::CreateTensor<float>(
         memoryInfo, scales.data(), scales.size(), scales_shape.data(),
         scales_shape.size()));
 
@@ -275,7 +277,7 @@ int Synthesizer::next(AudioChunk& chunk) {
     std::vector<int64_t> speaker_id_shape{(int64_t)speaker_id.size()};
 
     if (this->num_speakers > 1) {
-        input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+        input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
             memoryInfo, speaker_id.data(), speaker_id.size(),
             speaker_id_shape.data(), speaker_id_shape.size()));
     }
@@ -285,9 +287,9 @@ int Synthesizer::next(AudioChunk& chunk) {
                                                "scales", "sid"};
 
     // Get all output names
-    std::vector<std::string> output_names_strs =
-        this->session->GetOutputNames();
+    const auto output_names_strs = this->session->GetOutputNames();
     std::vector<const char *> output_names;
+    output_names.reserve(output_names_strs.size());
     for (const auto &name : output_names_strs) {
         output_names.push_back(name.c_str());
     }
@@ -305,8 +307,7 @@ int Synthesizer::next(AudioChunk& chunk) {
         output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
     chunk.num_samples = audio_shape[audio_shape.size() - 1];
 
-    const float *audio_tensor_data =
-        output_tensors.front().GetTensorData<float>();
+    const float *audio_tensor_data = output_tensors.front().GetTensorData<float>();
     this->chunk_samples.resize(chunk.num_samples);
     std::copy(audio_tensor_data, audio_tensor_data + chunk.num_samples,
               this->chunk_samples.begin());
@@ -350,12 +351,12 @@ int Synthesizer::next(AudioChunk& chunk) {
     }
 
     // Clean up
-    for (std::size_t i = 0; i < output_tensors.size(); i++) {
-        Ort::detail::OrtRelease(output_tensors[i].release());
+    for (auto& tensor : output_tensors) {
+        Ort::detail::OrtRelease(tensor.release());
     }
 
-    for (std::size_t i = 0; i < input_tensors.size(); i++) {
-        Ort::detail::OrtRelease(input_tensors[i].release());
+    for (auto& tensor : input_tensors) {
+        Ort::detail::OrtRelease(tensor.release());
     }
 
     return PIPER_OK;
