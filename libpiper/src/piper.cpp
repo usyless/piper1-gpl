@@ -210,8 +210,7 @@ int Synthesizer::start(const std::string& text) {
         sentence_ids.push_back(ID_EOS);
         sentence_codepoints.push_back(PHONEME_SEPARATOR);
 
-        this->phoneme_id_queue.emplace(
-            std::move(std::make_pair(sentence_codepoints, sentence_ids)));
+        this->phoneme_id_queue.emplace(sentence_codepoints, std::move(sentence_ids));
         sentence_ids.clear();
     }
 
