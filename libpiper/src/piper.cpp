@@ -12,7 +12,7 @@ namespace piper {
 
 using json = nlohmann::json;
 
-static std::optional<Synthesizer> Synthesizer::create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path) {
+static std::optional<Synthesizer> Synthesizer::create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path, std::optional<Ort::SessionOptions> options) {
     if (model_path.empty()) {
         return std::nullopt;
     }
@@ -76,10 +76,17 @@ static std::optional<Synthesizer> Synthesizer::create(std::string_view model_pat
         }
     }
 
-    // Load onnx model
-    synth.session_options.DisableCpuMemArena();
-    synth.session_options.DisableMemPattern();
-    synth.session_options.DisableProfiling();
+    if (options) {
+        synth.session_options = std::move(*options);
+    } else {
+        synth.session_options.DisableCpuMemArena();
+        synth.session_options.DisableMemPattern();
+        synth.session_options.DisableProfiling();
+        synth.session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+        synth.session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+        synth.session_options.SetInterOpNumThreads(1);
+        synth.session_options.SetIntraOpNumThreads((int)std::thread::hardware_concurrency());
+    }
 
     synth.session = std::make_unique<Ort::Session>(ort_env, model_path, synth.session_options);
 

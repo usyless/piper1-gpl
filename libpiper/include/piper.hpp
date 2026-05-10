@@ -238,7 +238,7 @@ namespace piper {
         *
         * \return a Piper text-to-speech synthesizer for the voice model.
         */
-        static std::optional<Synthesizer> create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path);
+        static std::optional<Synthesizer> create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path, std::optional<Ort::SessionOptions> options = std::nullopt);
 
         /**
         * \brief Start text-to-speech synthesis.
