@@ -10,7 +10,7 @@ include(FetchContent)
 FetchContent_Declare(
     espeak_ng_external
     GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
-    GIT_TAG 1.52.0
+    GIT_TAG fbe4b3764285c35b1f035cb8d09ad9fc19f71c30 # 10 April 2026
 )
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
