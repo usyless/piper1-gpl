@@ -270,7 +270,7 @@ namespace piper {
         *
         * \return PIPER_DONE when complete, otherwise PIPER_OK or error code.
         */
-        int next(piper_audio_chunk& chunk);
+        int next(AudioChunk& chunk);
 
         ~Synthesizer();
     };
