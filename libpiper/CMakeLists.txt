@@ -23,6 +23,7 @@ set(USE_KLATT OFF CACHE BOOL "" FORCE)
 set(USE_SPEECHPLAYER OFF CACHE BOOL "" FORCE)
 set(EXTRA_cmn ON CACHE BOOL "" FORCE)
 set(EXTRA_ru ON CACHE BOOL "" FORCE)
+set(ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(espeak_ng_external)
 
