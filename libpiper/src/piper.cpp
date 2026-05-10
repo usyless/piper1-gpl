@@ -229,13 +229,10 @@ int Synthesizer::next(AudioChunk& chunk) {
     this->chunk_alignments.clear();
 
     chunk.sample_rate = this->sample_rate;
-    chunk.samples = nullptr;
-    chunk.num_samples = 0;
+    chunk.samples = {};
     chunk.is_last = false;
-    chunk.phoneme_ids = nullptr;
-    chunk.num_phoneme_ids = 0;
-    chunk.alignments = nullptr;
-    chunk.num_alignments = 0;
+    chunk.phoneme_ids = {};
+    chunk.alignments = {};
 
     if (this->phoneme_id_queue.empty()) {
         // Empty final chunk
@@ -308,20 +305,19 @@ int Synthesizer::next(AudioChunk& chunk) {
 
     auto audio_shape =
         output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
-    chunk.num_samples = audio_shape[audio_shape.size() - 1];
+    const auto num_samples = audio_shape[audio_shape.size() - 1];
 
     const float *audio_tensor_data = output_tensors.front().GetTensorData<float>();
-    this->chunk_samples.resize(chunk.num_samples);
-    std::copy(audio_tensor_data, audio_tensor_data + chunk.num_samples,
+    this->chunk_samples.resize(num_samples);
+    std::copy(audio_tensor_data, audio_tensor_data + num_samples,
               this->chunk_samples.begin());
-    chunk.samples = this->chunk_samples.data();
+    chunk.samples = this->chunk_samples;
 
     chunk.is_last = this->phoneme_id_queue.empty();
 
     // Copy phonemes
     this->chunk_phonemes = std::move(next_phonemes);
-    chunk.phonemes = this->chunk_phonemes.data();
-    chunk.num_phonemes = this->chunk_phonemes.size();
+    chunk.phonemes = this->chunk_phonemes;
 
     // Copy phoneme ids
     for (auto phoneme_id : next_ids) {
@@ -332,25 +328,24 @@ int Synthesizer::next(AudioChunk& chunk) {
         this->chunk_phoneme_ids.push_back(static_cast<int>(phoneme_id));
     }
 
-    chunk.phoneme_ids = this->chunk_phoneme_ids.data();
-    chunk.num_phoneme_ids = this->chunk_phoneme_ids.size();
+    chunk.phoneme_ids = this->chunk_phoneme_ids;
 
     // Check for alignments
     if (output_tensors.size() > 1) {
         auto alignments_shape =
             output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
 
-        chunk.num_alignments = alignments_shape[alignments_shape.size() - 1];
+        const auto num_alignments = alignments_shape[alignments_shape.size() - 1];
         const float *alignments_tensor_data =
             output_tensors[1].GetTensorData<float>();
 
-        this->chunk_alignments.resize(chunk.num_alignments);
-        for (std::size_t i = 0; i < chunk.num_alignments; i++) {
+        this->chunk_alignments.resize(num_alignments);
+        for (std::size_t i = 0; i < num_alignments; ++i) {
             this->chunk_alignments[i] =
                 (int)(alignments_tensor_data[i] * this->hop_length);
         }
 
-        chunk.alignments = this->chunk_alignments.data();
+        chunk.alignments = this->chunk_alignments;
     }
 
     // Clean up

@@ -1,9 +1,9 @@
 #pragma once
 
+#include <span>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <uchar.h>
 
 #include "uni_algo.h"
 
@@ -107,12 +107,7 @@ namespace piper {
         /**
         * \brief Raw samples returned from the voice model.
         */
-        const float *samples;
-
-        /**
-        * \brief Number of samples in the audio chunk.
-        */
-        size_t num_samples;
+        std::span<const float> samples;
 
         /**
         * \brief Sample rate in Hertz.
@@ -140,12 +135,7 @@ namespace piper {
         * 4. Advance your iterators in the phoneme id and alignment arrays by N
         * 5. Repeat
         */
-        const char32_t *phonemes;
-
-        /**
-        * \brief Number of codepoints in phonemes.
-        */
-        size_t num_phonemes;
+        std::span<const char32_t> phonemes;
 
         /**
         * \brief Phoneme ids that produced this audio chunk.
@@ -155,12 +145,7 @@ namespace piper {
         * 1 = beginning of sentence
         * 2 = end of sentence
         */
-        const int *phoneme_ids;
-
-        /**
-        * \brief Number of ids in phoneme_ids.
-        */
-        size_t num_phoneme_ids;
+        std::span<const int> phoneme_ids;
 
         /**
         * \brief Audio sample count for each phoneme id.
@@ -172,14 +157,7 @@ namespace piper {
         *
         * Use the phonemes array to align these sample counts with actual phonemes.
         */
-        const int *alignments;
-
-        /**
-        * \brief Number of alignments.
-        *
-        * This should be the same as num_phoneme_ids.
-        */
-        size_t num_alignments;
+        std::span<const int> alignments;
     };
 
     /**
@@ -212,9 +190,6 @@ namespace piper {
         std::vector<int> chunk_phoneme_ids;
         std::vector<Phoneme> chunk_phonemes;
         std::vector<int> chunk_alignments;
-        float length_scale = DEFAULT_LENGTH_SCALE;
-        float noise_scale = DEFAULT_NOISE_SCALE;
-        float noise_w_scale = DEFAULT_NOISE_W_SCALE;
 
         Synthesizer(const Synthesizer&) = delete;
         Synthesizer& operator=(const Synthesizer&) = delete;
