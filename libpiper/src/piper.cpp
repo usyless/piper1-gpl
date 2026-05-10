@@ -7,6 +7,7 @@
 #include "onnxruntime_cxx_api.h"
 #include "uni_algo.h"
 #include <thread>
+#include <string_view>
 
 #include <espeak-ng/speak_lib.h>
 
