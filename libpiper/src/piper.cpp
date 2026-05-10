@@ -5,6 +5,7 @@
 #include <limits>
 #include "json.hpp"
 #include "onnxruntime_cxx_api.h"
+#include "uni_algo.h"
 #include <thread>
 
 #include <espeak-ng/speak_lib.h>
@@ -12,6 +13,17 @@
 static Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "piper"};
 
 namespace piper {
+
+inline std::optional<Phoneme> get_codepoint(const std::string& s) {
+    auto view = una::views::utf8(s);
+    auto it = view.begin();
+
+    if (it != view.end()) {
+        return *it;
+    }
+
+    return std::nullopt;
+}
 
 using json = nlohmann::json;
 

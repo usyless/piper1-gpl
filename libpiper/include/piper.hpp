@@ -5,8 +5,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "uni_algo.h"
-
 #include <map>
 #include <memory>
 #include <optional>
@@ -247,15 +245,4 @@ namespace piper {
 
         ~Synthesizer();
     };
-
-    inline std::optional<Phoneme> get_codepoint(const std::string& s) {
-        auto view = una::views::utf8(s);
-        auto it = view.begin();
-
-        if (it != view.end()) {
-            return *it;
-        }
-
-        return std::nullopt;
-    }
 }
