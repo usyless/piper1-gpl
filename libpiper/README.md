@@ -2,7 +2,7 @@
 
 Include in your own cmake project:
 
-```c++
+```cmake
 FetchContent_Declare(
     libpiper
     GIT_REPOSITORY https://github.com/usyless/piper1-gpl.git
@@ -20,7 +20,6 @@ Then you want to include `<piper.hpp>`
 To move onnx and espeak-ng data you can use
 
 ```cmake
-
 file(GLOB ONNX_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/_deps/libpiper-src/libpiper/lib/onnxruntime-*/lib/libonnxruntime.so.1")
 
 add_custom_command(TARGET ${PROJECT_NAME}
