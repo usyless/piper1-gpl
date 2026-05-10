@@ -19,7 +19,7 @@ Then you want to include `<piper.hpp>`
 
 To move onnx and espeak-ng data you can use
 
-```c++
+```cmake
 
 file(GLOB ONNX_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/_deps/libpiper-src/libpiper/lib/onnxruntime-*/lib/libonnxruntime.so.1")
 
@@ -38,7 +38,7 @@ add_custom_command(TARGET ${PROJECT_NAME}
 
 ## Example
 
-``` c++
+```c++
 #include <fstream>
 #include <piper.hpp>
 
