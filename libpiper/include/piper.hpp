@@ -60,9 +60,6 @@ namespace piper {
 
     constexpr inline int DEFAULT_HOP_LENGTH = 256;
 
-    // onnx
-    Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "piper"};
-
     /**
     * \brief Options for synthesis.
     *
@@ -74,7 +71,7 @@ namespace piper {
         *
         * Id 0 is the first speaker.
         */
-        int speaker_id;
+        SpeakerId speaker_id;
 
         /**
         * \brief How fast the text is spoken.
@@ -191,16 +188,18 @@ namespace piper {
     */
     struct Synthesizer {
         // From config JSON file
-        std::string espeak_voice;
+        std::string espeak_voice = "en-us";
         int sample_rate;
-        int num_speakers;
+        SpeakerId num_speakers;
         PhonemeIdMap phoneme_id_map;
         int hop_length = DEFAULT_HOP_LENGTH;
 
-        // Default synthesis settings for the voice
-        float synth_length_scale = DEFAULT_LENGTH_SCALE;
-        float synth_noise_scale = DEFAULT_NOISE_SCALE;
-        float synth_noise_w_scale = DEFAULT_NOISE_W_SCALE;
+        SynthesizerOptions options {
+            .speaker_id = 0,
+            .length_scale = DEFAULT_LENGTH_SCALE,
+            .noise_scale = DEFAULT_NOISE_SCALE,
+            .noise_w_scale = DEFAULT_NOISE_W_SCALE
+        };
 
         // onnx
         std::unique_ptr<Ort::Session> session;
@@ -217,7 +216,14 @@ namespace piper {
         float length_scale = DEFAULT_LENGTH_SCALE;
         float noise_scale = DEFAULT_NOISE_SCALE;
         float noise_w_scale = DEFAULT_NOISE_W_SCALE;
-        SpeakerId speaker_id = 0;
+
+        // Delete copy constructor and copy assignment
+        Synthesizer(const Synthesizer&) = delete;
+        Synthesizer& operator=(const Synthesizer&) = delete;
+
+        // Allow move constructor and move assignment
+        Synthesizer(Synthesizer&&) noexcept = default;
+        Synthesizer& operator=(Synthesizer&&) noexcept = default;
 
         /**
         * \brief Create a Piper text-to-speech synthesizer from a voice model.
@@ -232,7 +238,7 @@ namespace piper {
         *
         * \return a Piper text-to-speech synthesizer for the voice model.
         */
-        static Synthesizer create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path);
+        static std::optional<Synthesizer> create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path);
 
         /**
         * \brief Start text-to-speech synthesis.
@@ -241,13 +247,11 @@ namespace piper {
         *
         * \param text text to synthesize into audio.
         *
-        * \param options synthesis options or NULL for defaults.
-        *
         * \sa \ref Synthesizer::next
         *
         * \return PIPER_OK or error code.
         */
-        int start(const std::string& text, const SynthesizerOptions& options);
+        int start(const std::string& text);
 
         /**
         * \brief Synthesize next chunk of audio.
@@ -267,15 +271,6 @@ namespace piper {
         * \return PIPER_DONE when complete, otherwise PIPER_OK or error code.
         */
         int next(piper_audio_chunk& chunk);
-
-        /**
-        * \brief Get the default synthesis options for a Piper synthesizer.
-        *
-        * \param synth Piper synthesizer.
-        *
-        * \return synthesis options from voice config.
-        */
-        SynthesizerOptions get_default_options();
 
         ~Synthesizer();
     };

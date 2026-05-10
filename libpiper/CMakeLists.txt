@@ -96,7 +96,7 @@ endif()
 
 # ---- libpiper ---
 
-add_library(piper SHARED
+add_library(piper STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
 )
 
@@ -104,6 +104,7 @@ target_include_directories(piper PUBLIC
     ${ONNXRUNTIME_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
 target_link_directories(piper PUBLIC
     ${ONNXRUNTIME_DIR}/lib
 )
@@ -112,30 +113,4 @@ target_link_libraries(piper
     espeak-ng
     ucd
     onnxruntime
-)
-
-# ---- install ---
-
-include(GNUInstallDirs)
-
-install(TARGETS piper
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
-
-install(
-    FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/piper.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-install(
-    DIRECTORY ${ONNXRUNTIME_DIR}/lib/
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-set(ESPEAKNG_DATA_SRC ${espeak_ng_external_SOURCE_DIR}/espeak-ng-data)
-set(ESPEAKNG_DATA_DST ${CMAKE_INSTALL_PREFIX}/espeak-ng-data)
-
-install(
-    DIRECTORY ${ESPEAKNG_DATA_SRC}
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
 )

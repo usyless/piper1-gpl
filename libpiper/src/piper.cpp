@@ -1,5 +1,4 @@
-#include "piper.h"
-#include "piper_impl.hpp"
+#include "piper.hpp"
 
 #include <array>
 #include <fstream>
@@ -7,155 +6,100 @@
 
 #include <espeak-ng/speak_lib.h>
 
+static Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "piper"};
+
+namespace piper {
+
 using json = nlohmann::json;
 
-struct piper_synthesizer *piper_create(const char *model_path,
-                                       const char *config_path,
-                                       const char *espeak_data_path) {
-    if (!model_path) {
-        return nullptr;
+static std::optional<Synthesizer> Synthesizer::create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path) {
+    if (model_path.empty()) {
+        return std::nullopt;
     }
 
-    std::string config_path_str;
-    if (!config_path) {
-        std::string model_path_str(model_path);
-        config_path_str = model_path_str + ".json";
-    } else {
-        config_path_str = config_path;
-    }
-
-    std::ifstream config_stream(config_path_str);
+    std::ifstream config_stream(config_path.empty() ? model_path + ".json" : config_path);
     auto config = json::parse(config_stream);
 
-    if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, espeak_data_path, 0) <
-        0) {
-        return nullptr;
+    if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, espeak_data_path, 0) < 0) {
+        return std::nullopt;
     }
 
-    piper_synthesizer *synth = new piper_synthesizer();
+    Synthesizer synth;
 
     // Load config options
-    synth->espeak_voice = "en-us"; // default
     if (config.contains("espeak")) {
-        auto &espeak_obj = config["espeak"];
+        const auto &espeak_obj = config.at("espeak");
         if (espeak_obj.contains("voice")) {
-            synth->espeak_voice = espeak_obj["voice"].get<std::string>();
+            espeak_obj.at("voice").get_to(synth.espeak_voice);
         }
     }
 
     if (config.contains("audio")) {
-        auto &audio_obj = config["audio"];
+        const auto &audio_obj = config.at("audio");
         if (audio_obj.contains("sample_rate")) {
             // Sample rate of generated audio in hertz
-            synth->sample_rate = audio_obj["sample_rate"].get<int>();
+            audio_obj.at("sample_rate").get_to(synth.sample_rate);
         }
     }
 
     // phoneme to [id] map
     // Maps phonemes to one or more phoneme ids (required).
     if (config.contains("phoneme_id_map")) {
-        auto &phoneme_id_map_value = config["phoneme_id_map"];
-        for (auto &from_phoneme_item : phoneme_id_map_value.items()) {
-            std::string from_phoneme = from_phoneme_item.key();
-            auto from_codepoint = get_codepoint(from_phoneme);
-            if (!from_codepoint) {
-                // No codepoint
-                continue;
-            }
+        const auto& phoneme_id_map_value = config.at("phoneme_id_map");
+        for (const auto& from_phoneme_item : phoneme_id_map_value.items()) {
+            auto from_codepoint = get_codepoint(from_phoneme_item.key());
+            if (!from_codepoint) continue;
 
-            for (auto &to_id_value : from_phoneme_item.value()) {
-                PhonemeId to_id = to_id_value.get<PhonemeId>();
-                synth->phoneme_id_map[*from_codepoint].push_back(to_id);
+            auto& from_codepoint_map = synth.phoneme_id_map[from_codepoint_value];
+
+            for (const auto& to_id_value : from_phoneme_item.value()) {
+                from_codepoint_map.emplace_back(to_id_value.get<PhonemeId>());
             }
         }
     }
 
-    synth->num_speakers = config["num_speakers"].get<SpeakerId>();
+    synth.num_speakers = config.at("num_speakers").get<SpeakerId>();
 
     if (config.contains("inference")) {
         // Overrides default inference settings
-        auto inference_value = config["inference"];
+        const auto& inference_value = config.at("inference");
         if (inference_value.contains("noise_scale")) {
-            synth->synth_noise_scale =
-                inference_value["noise_scale"].get<float>();
+            inference_value.at("noise_scale").get_to(synth.options.noise_scale);
         }
 
         if (inference_value.contains("length_scale")) {
-            synth->synth_length_scale =
-                inference_value["length_scale"].get<float>();
+            inference_value.at("length_scale").get_to(synth.options.length_scale);
         }
 
         if (inference_value.contains("noise_w")) {
-            synth->synth_noise_w_scale =
-                inference_value["noise_w"].get<float>();
+            inference_value.at("noise_w").get_to(synth.options.noise_w_scale);
         }
     }
 
     // Load onnx model
-    synth->session_options.DisableCpuMemArena();
-    synth->session_options.DisableMemPattern();
-    synth->session_options.DisableProfiling();
+    synth.session_options.DisableCpuMemArena();
+    synth.session_options.DisableMemPattern();
+    synth.session_options.DisableProfiling();
 
-    synth->session = std::make_unique<Ort::Session>(
-        Ort::Session(ort_env, model_path, synth->session_options));
+    synth.session = std::make_unique<Ort::Session>(ort_env, model_path, synth.session_options);
 
     return synth;
 }
 
-void piper_free(struct piper_synthesizer *synth) {
+Synthesizer::~Synthesizer() {
     espeak_Terminate();
-
-    if (!synth) {
-        return;
-    }
-
-    delete synth;
 }
 
-piper_synthesize_options
-piper_default_synthesize_options(piper_synthesizer *synth) {
-    piper_synthesize_options options;
-    options.speaker_id = 0;
-    options.length_scale = DEFAULT_LENGTH_SCALE;
-    options.noise_scale = DEFAULT_NOISE_SCALE;
-    options.noise_w_scale = DEFAULT_NOISE_W_SCALE;
-
-    if (synth) {
-        options.length_scale = synth->synth_length_scale;
-        options.noise_scale = synth->synth_noise_scale;
-        options.noise_w_scale = synth->synth_noise_w_scale;
-    }
-
-    return options;
-}
-
-int piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
-                           const piper_synthesize_options *options) {
-    if (!synth) {
-        return PIPER_ERR_GENERIC;
-    }
-
-    if (espeak_SetVoiceByName(synth->espeak_voice.c_str()) != EE_OK) {
+int Synthesizer::start(const std::string& text) {
+    if (espeak_SetVoiceByName(espeak_voice.c_str()) != EE_OK) {
         return PIPER_ERR_GENERIC;
     }
 
     // Clear state
-    while (!synth->phoneme_id_queue.empty()) {
-        synth->phoneme_id_queue.pop();
+    while (!this->phoneme_id_queue.empty()) {
+        this->phoneme_id_queue.pop();
     }
-    synth->chunk_samples.clear();
-
-    std::unique_ptr<piper_synthesize_options> default_options;
-    if (!options) {
-        default_options = std::make_unique<piper_synthesize_options>(
-            piper_default_synthesize_options(synth));
-        options = default_options.get();
-    }
-
-    synth->length_scale = options->length_scale;
-    synth->noise_scale = options->noise_scale;
-    synth->noise_w_scale = options->noise_w_scale;
-    synth->speaker_id = options->speaker_id;
+    this->chunk_samples.clear();
 
     // phonemize
     std::vector<std::string> sentence_phonemes{""};
@@ -234,8 +178,8 @@ int piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
                 in_lang_flag = true;
             } else {
                 // Look up ids
-                auto ids_for_phoneme = synth->phoneme_id_map.find(phoneme);
-                if (ids_for_phoneme != synth->phoneme_id_map.end()) {
+                auto ids_for_phoneme = this->phoneme_id_map.find(phoneme);
+                if (ids_for_phoneme != this->phoneme_id_map.end()) {
                     for (auto id : ids_for_phoneme->second) {
                         sentence_codepoints.push_back(phoneme);
                         sentence_ids.push_back(id);
@@ -255,7 +199,7 @@ int piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
         sentence_ids.push_back(ID_EOS);
         sentence_codepoints.push_back(PHONEME_SEPARATOR);
 
-        synth->phoneme_id_queue.emplace(
+        this->phoneme_id_queue.emplace(
             std::move(std::make_pair(sentence_codepoints, sentence_ids)));
         sentence_ids.clear();
     }
@@ -263,48 +207,39 @@ int piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     return PIPER_OK;
 }
 
-int piper_synthesize_next(struct piper_synthesizer *synth,
-                          struct piper_audio_chunk *chunk) {
-    if (!synth) {
-        return PIPER_ERR_GENERIC;
-    }
-
-    if (!chunk) {
-        return PIPER_ERR_GENERIC;
-    }
-
+int Synthesizer::next(piper_audio_chunk& chunk) {
     // Clear data from previous call
-    synth->chunk_samples.clear();
-    synth->chunk_phonemes.clear();
-    synth->chunk_phoneme_ids.clear();
-    synth->chunk_alignments.clear();
+    this->chunk_samples.clear();
+    this->chunk_phonemes.clear();
+    this->chunk_phoneme_ids.clear();
+    this->chunk_alignments.clear();
 
-    chunk->sample_rate = synth->sample_rate;
-    chunk->samples = nullptr;
-    chunk->num_samples = 0;
-    chunk->is_last = false;
-    chunk->phoneme_ids = nullptr;
-    chunk->num_phoneme_ids = 0;
-    chunk->alignments = nullptr;
-    chunk->num_alignments = 0;
+    chunk.sample_rate = this->sample_rate;
+    chunk.samples = nullptr;
+    chunk.num_samples = 0;
+    chunk.is_last = false;
+    chunk.phoneme_ids = nullptr;
+    chunk.num_phoneme_ids = 0;
+    chunk.alignments = nullptr;
+    chunk.num_alignments = 0;
 
-    if (synth->phoneme_id_queue.empty()) {
+    if (this->phoneme_id_queue.empty()) {
         // Empty final chunk
-        chunk->is_last = true;
+        chunk.is_last = true;
         return PIPER_DONE;
     }
 
     // Process next list of phoneme ids
-    auto [next_phonemes, next_ids] = std::move(synth->phoneme_id_queue.front());
-    synth->phoneme_id_queue.pop();
+    auto [next_phonemes, next_ids] = std::move(this->phoneme_id_queue.front());
+    this->phoneme_id_queue.pop();
 
     auto memoryInfo = Ort::MemoryInfo::CreateCpu(
         OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
     // Allocate
     std::vector<int64_t> phoneme_id_lengths{(int64_t)next_ids.size()};
-    std::vector<float> scales{synth->noise_scale, synth->length_scale,
-                              synth->noise_w_scale};
+    std::vector<float> scales{this->options.noise_scale, this->options.length_scale,
+                              this->options.noise_w_scale};
 
     std::vector<Ort::Value> input_tensors;
     std::vector<int64_t> phoneme_ids_shape{1, (int64_t)next_ids.size()};
@@ -326,10 +261,10 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
     // Add speaker id.
     // NOTE: These must be kept outside the "if" below to avoid being
     // deallocated.
-    std::vector<int64_t> speaker_id{(int64_t)synth->speaker_id};
+    std::vector<int64_t> speaker_id{(int64_t)this->options.speaker_id};
     std::vector<int64_t> speaker_id_shape{(int64_t)speaker_id.size()};
 
-    if (synth->num_speakers > 1) {
+    if (this->num_speakers > 1) {
         input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
             memoryInfo, speaker_id.data(), speaker_id.size(),
             speaker_id_shape.data(), speaker_id_shape.size()));
@@ -341,14 +276,14 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
 
     // Get all output names
     std::vector<std::string> output_names_strs =
-        synth->session->GetOutputNames();
+        this->session->GetOutputNames();
     std::vector<const char *> output_names;
     for (const auto &name : output_names_strs) {
         output_names.push_back(name.c_str());
     }
 
     // Infer
-    auto output_tensors = synth->session->Run(
+    auto output_tensors = this->session->Run(
         Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
         input_tensors.size(), output_names.data(), output_names.size());
 
@@ -362,17 +297,17 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
 
     const float *audio_tensor_data =
         output_tensors.front().GetTensorData<float>();
-    synth->chunk_samples.resize(chunk->num_samples);
+    this->chunk_samples.resize(chunk->num_samples);
     std::copy(audio_tensor_data, audio_tensor_data + chunk->num_samples,
-              synth->chunk_samples.begin());
-    chunk->samples = synth->chunk_samples.data();
+              this->chunk_samples.begin());
+    chunk->samples = this->chunk_samples.data();
 
-    chunk->is_last = synth->phoneme_id_queue.empty();
+    chunk->is_last = this->phoneme_id_queue.empty();
 
     // Copy phonemes
-    synth->chunk_phonemes = std::move(next_phonemes);
-    chunk->phonemes = synth->chunk_phonemes.data();
-    chunk->num_phonemes = synth->chunk_phonemes.size();
+    this->chunk_phonemes = std::move(next_phonemes);
+    chunk->phonemes = this->chunk_phonemes.data();
+    chunk->num_phonemes = this->chunk_phonemes.size();
 
     // Copy phoneme ids
     for (auto phoneme_id : next_ids) {
@@ -380,11 +315,11 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
             phoneme_id > std::numeric_limits<int>::max()) {
             continue;
         }
-        synth->chunk_phoneme_ids.push_back(static_cast<int>(phoneme_id));
+        this->chunk_phoneme_ids.push_back(static_cast<int>(phoneme_id));
     }
 
-    chunk->phoneme_ids = synth->chunk_phoneme_ids.data();
-    chunk->num_phoneme_ids = synth->chunk_phoneme_ids.size();
+    chunk->phoneme_ids = this->chunk_phoneme_ids.data();
+    chunk->num_phoneme_ids = this->chunk_phoneme_ids.size();
 
     // Check for alignments
     if (output_tensors.size() > 1) {
@@ -395,13 +330,13 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
         const float *alignments_tensor_data =
             output_tensors[1].GetTensorData<float>();
 
-        synth->chunk_alignments.resize(chunk->num_alignments);
+        this->chunk_alignments.resize(chunk->num_alignments);
         for (std::size_t i = 0; i < chunk->num_alignments; i++) {
-            synth->chunk_alignments[i] =
-                (int)(alignments_tensor_data[i] * synth->hop_length);
+            this->chunk_alignments[i] =
+                (int)(alignments_tensor_data[i] * this->hop_length);
         }
 
-        chunk->alignments = synth->chunk_alignments.data();
+        chunk->alignments = this->chunk_alignments.data();
     }
 
     // Clean up
@@ -414,4 +349,6 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
     }
 
     return PIPER_OK;
+}
+
 }
