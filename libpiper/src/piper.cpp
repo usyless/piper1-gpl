@@ -134,9 +134,9 @@ int Synthesizer::start(const std::string& text) {
     const void *text_ptr = text.c_str();
     while (text_ptr != nullptr) {
         int terminator = 0;
-        std::string terminator_str = "";
+        std::string_view terminator_str{""};
 
-        const char *phonemes = espeak_TextToPhonemesWithTerminator(
+        const char* phonemes = espeak_TextToPhonemesWithTerminator(
             &text_ptr, espeakCHARS_AUTO, espeakPHONEMES_IPA, &terminator);
 
         if (phonemes) {
