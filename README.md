@@ -1,5 +1,7 @@
 ![Piper](etc/logo.png)
 
+Modified by usyless to update `libpiper` with a c++ api and make some optimisations
+
 A fast and local neural text-to-speech engine that embeds [espeak-ng][] for phonemization.
 
 Install with:
