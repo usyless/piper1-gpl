@@ -16,6 +16,7 @@ namespace piper {
 using json = nlohmann::json;
 
 std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, const std::string& config_path, const std::string& espeak_data_path, std::optional<Ort::SessionOptions> options) {
+    try {
     if (model_path.empty()) {
         return nullptr;
     }
@@ -51,7 +52,7 @@ std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, 
     if (config.contains("phoneme_id_map")) {
         const auto& phoneme_id_map_value = config.at("phoneme_id_map");
         for (const auto& from_phoneme_item : phoneme_id_map_value.items()) {
-            auto from_codepoint = get_codepoint(from_phoneme_item.key());
+            const auto from_codepoint = get_codepoint(from_phoneme_item.key());
             if (!from_codepoint) continue;
 
             auto& from_codepoint_map = synth.phoneme_id_map[*from_codepoint];
@@ -95,6 +96,9 @@ std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, 
     synth.session = std::make_unique<Ort::Session>(ort_env, model_path.c_str(), synth.session_options);
 
     return synth_ptr;
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 Synthesizer::~Synthesizer() {
@@ -147,7 +151,7 @@ int Synthesizer::start(const std::string& text) {
         sentence_phonemes[current_idx] += terminator_str;
 
         if ((terminator & CLAUSE_TYPE_SENTENCE) == CLAUSE_TYPE_SENTENCE) {
-            sentence_phonemes.push_back("");
+            sentence_phonemes.emplace_back();
             current_idx = sentence_phonemes.size() - 1;
         }
     }
