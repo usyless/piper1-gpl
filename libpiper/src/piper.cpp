@@ -3,6 +3,8 @@
 #include <array>
 #include <fstream>
 #include <limits>
+#include "json.hpp"
+#include <thread>
 
 #include <espeak-ng/speak_lib.h>
 
@@ -12,19 +14,20 @@ namespace piper {
 
 using json = nlohmann::json;
 
-static std::optional<Synthesizer> Synthesizer::create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path, std::optional<Ort::SessionOptions> options) {
+std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, const std::string& config_path, const std::string& espeak_data_path, std::optional<Ort::SessionOptions> options) {
     if (model_path.empty()) {
-        return std::nullopt;
+        return nullptr;
     }
 
     std::ifstream config_stream(config_path.empty() ? model_path + ".json" : config_path);
     auto config = json::parse(config_stream);
 
-    if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, espeak_data_path, 0) < 0) {
-        return std::nullopt;
+    if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, espeak_data_path.c_str(), 0) < 0) {
+        return nullptr;
     }
 
-    Synthesizer synth;
+    auto synth_ptr = std::make_unique<Synthesizer>();
+    auto& synth = *synth_ptr;
 
     // Load config options
     if (config.contains("espeak")) {
@@ -50,7 +53,7 @@ static std::optional<Synthesizer> Synthesizer::create(std::string_view model_pat
             auto from_codepoint = get_codepoint(from_phoneme_item.key());
             if (!from_codepoint) continue;
 
-            auto& from_codepoint_map = synth.phoneme_id_map[from_codepoint_value];
+            auto& from_codepoint_map = synth.phoneme_id_map[*from_codepoint];
 
             for (const auto& to_id_value : from_phoneme_item.value()) {
                 from_codepoint_map.emplace_back(to_id_value.get<PhonemeId>());
@@ -88,9 +91,9 @@ static std::optional<Synthesizer> Synthesizer::create(std::string_view model_pat
         synth.session_options.SetIntraOpNumThreads((int)std::thread::hardware_concurrency());
     }
 
-    synth.session = std::make_unique<Ort::Session>(ort_env, model_path, synth.session_options);
+    synth.session = std::make_unique<Ort::Session>(ort_env, model_path.c_str(), synth.session_options);
 
-    return synth;
+    return synth_ptr;
 }
 
 Synthesizer::~Synthesizer() {
@@ -111,7 +114,7 @@ int Synthesizer::start(const std::string& text) {
     // phonemize
     std::vector<std::string> sentence_phonemes{""};
     std::size_t current_idx = 0;
-    const void *text_ptr = text;
+    const void *text_ptr = text.c_str();
     while (text_ptr != nullptr) {
         int terminator = 0;
         std::string terminator_str = "";
@@ -214,7 +217,7 @@ int Synthesizer::start(const std::string& text) {
     return PIPER_OK;
 }
 
-int Synthesizer::next(piper_audio_chunk& chunk) {
+int Synthesizer::next(AudioChunk& chunk) {
     // Clear data from previous call
     this->chunk_samples.clear();
     this->chunk_phonemes.clear();

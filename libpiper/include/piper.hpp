@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <uchar.h>
 
-#include "json.hpp"
 #include "uni_algo.h"
 
 #include <map>
@@ -217,13 +216,12 @@ namespace piper {
         float noise_scale = DEFAULT_NOISE_SCALE;
         float noise_w_scale = DEFAULT_NOISE_W_SCALE;
 
-        // Delete copy constructor and copy assignment
         Synthesizer(const Synthesizer&) = delete;
         Synthesizer& operator=(const Synthesizer&) = delete;
+        Synthesizer(Synthesizer&&) noexcept = delete;
+        Synthesizer& operator=(Synthesizer&&) noexcept = delete;
 
-        // Allow move constructor and move assignment
-        Synthesizer(Synthesizer&&) noexcept = default;
-        Synthesizer& operator=(Synthesizer&&) noexcept = default;
+        Synthesizer() = default;
 
         /**
         * \brief Create a Piper text-to-speech synthesizer from a voice model.
@@ -238,7 +236,7 @@ namespace piper {
         *
         * \return a Piper text-to-speech synthesizer for the voice model.
         */
-        static std::optional<Synthesizer> create(std::string_view model_path, std::string_view config_path, std::string_view espeak_data_path, std::optional<Ort::SessionOptions> options = std::nullopt);
+        static std::unique_ptr<Synthesizer> create(const std::string& model_path, const std::string& config_path, const std::string& espeak_data_path, std::optional<Ort::SessionOptions> options = std::nullopt);
 
         /**
         * \brief Start text-to-speech synthesis.
