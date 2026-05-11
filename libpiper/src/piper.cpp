@@ -3,6 +3,7 @@
 #include <array>
 #include <fstream>
 #include <limits>
+#include <array>
 #include "json.hpp"
 #include "onnxruntime_cxx_api.h"
 #include "uni_algo.h"
@@ -261,24 +262,24 @@ int Synthesizer::next(AudioChunk& chunk) {
         OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
     // Allocate
-    std::vector<int64_t> phoneme_id_lengths{(int64_t)next_ids.size()};
-    std::vector<float> scales{this->options.noise_scale, this->options.length_scale,
+    std::array<int64_t, 1> phoneme_id_lengths{(int64_t)next_ids.size()};
+    std::array<float, 3> scales{this->options.noise_scale, this->options.length_scale,
                               this->options.noise_w_scale};
 
     std::vector<Ort::Value> input_tensors;
     input_tensors.reserve((this->num_speakers > 1) ? 5 : 4);
-    std::vector<int64_t> phoneme_ids_shape{1, (int64_t)next_ids.size()};
+    const std::array<int64_t, 2> phoneme_ids_shape{1, (int64_t)next_ids.size()};
     input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
         memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
         phoneme_ids_shape.size()));
 
-    std::vector<int64_t> phoneme_id_lengths_shape{
+    constexpr static std::array<int64_t, 1> phoneme_id_lengths_shape{
         (int64_t)phoneme_id_lengths.size()};
     input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
         memoryInfo, phoneme_id_lengths.data(), phoneme_id_lengths.size(),
         phoneme_id_lengths_shape.data(), phoneme_id_lengths_shape.size()));
 
-    std::vector<int64_t> scales_shape{(int64_t)scales.size()};
+    static constexpr std::array<int64_t, 1> scales_shape{(int64_t)scales.size()};
     input_tensors.emplace_back(Ort::Value::CreateTensor<float>(
         memoryInfo, scales.data(), scales.size(), scales_shape.data(),
         scales_shape.size()));
@@ -286,8 +287,8 @@ int Synthesizer::next(AudioChunk& chunk) {
     // Add speaker id.
     // NOTE: These must be kept outside the "if" below to avoid being
     // deallocated.
-    std::vector<int64_t> speaker_id{(int64_t)this->options.speaker_id};
-    std::vector<int64_t> speaker_id_shape{(int64_t)speaker_id.size()};
+    std::array<int64_t, 1> speaker_id{(int64_t)this->options.speaker_id};
+    static constexpr std::array<int64_t, 1> speaker_id_shape{(int64_t)speaker_id.size()};
 
     if (this->num_speakers > 1) {
         input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
@@ -296,7 +297,7 @@ int Synthesizer::next(AudioChunk& chunk) {
     }
 
     // From export_onnx.py
-    std::array<const char *, 4> input_names = {"input", "input_lengths",
+    static constexpr std::array<const char *, 4> input_names = {"input", "input_lengths",
                                                "scales", "sid"};
 
     // Get all output names
