@@ -343,7 +343,11 @@ namespace piper {
                 }
                 #endif
 
-                std::invoke(callback, chunk);
+                if constexpr (std::is_convertible_v<std::invoke_result_t<F&, const AudioChunk&>, bool>) {
+                    if (!std::invoke(callback, chunk)) break;
+                } else {
+                    std::invoke(callback, chunk);
+                }
             }
 
             return true;
