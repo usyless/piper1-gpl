@@ -108,9 +108,12 @@ add_library(${PROJECT_NAME} STATIC
 )
 
 if (LIBPIPER_FULL_AUDIOCHUNK)
+    message(STATUS "Using the full piper::AudioChunk as set by LIBPIPER_FULL_AUDIOCHUNK")
     target_compile_definitions(${PROJECT_NAME} PUBLIC 
         LIBPIPER_FULL_AUDIOCHUNK
     )
+else()
+    message(STATUS "Ignoring the full piper::AudioChunk as set by LIBPIPER_FULL_AUDIOCHUNK")
 endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
