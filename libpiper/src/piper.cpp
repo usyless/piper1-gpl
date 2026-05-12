@@ -1,9 +1,6 @@
 #include "piper.hpp"
 
-#include <array>
 #include <fstream>
-#include <limits>
-#include <array>
 #include "json.hpp"
 #include "onnxruntime_cxx_api.h"
 #include "uni_algo.h"
@@ -119,16 +116,13 @@ Synthesizer::~Synthesizer() {
     espeak_Terminate();
 }
 
-int Synthesizer::start(const std::string& text) {
+bool Synthesizer::start(const std::string& text) {
     if (espeak_SetVoiceByName(espeak_voice.c_str()) != EE_OK) {
-        return PIPER_ERR_GENERIC;
+        return false;
     }
 
     // Clear state
-    while (!this->phoneme_id_queue.empty()) {
-        this->phoneme_id_queue.pop();
-    }
-    this->chunk_samples.clear();
+    this->phoneme_id_queue.clear();
 
     // phonemize
     std::vector<std::string> sentence_phonemes{""};
@@ -228,149 +222,10 @@ int Synthesizer::start(const std::string& text) {
         sentence_ids.push_back(ID_EOS);
         sentence_codepoints.push_back(PHONEME_SEPARATOR);
 
-        this->phoneme_id_queue.emplace(sentence_codepoints, std::move(sentence_ids));
-        sentence_ids.clear();
+        this->phoneme_id_queue.emplace_back(sentence_codepoints, std::move(sentence_ids));
     }
 
-    return PIPER_OK;
-}
-
-int Synthesizer::next(AudioChunk& chunk) {
-    // Clear data from previous call
-    this->chunk_samples.clear();
-    #ifdef LIBPIPER_FULL_AUDIOCHUNK
-    this->chunk_phonemes.clear();
-    this->chunk_phoneme_ids.clear();
-    this->chunk_alignments.clear();
-    #endif
-
-    chunk.sample_rate = this->sample_rate;
-    chunk.samples = {};
-    chunk.is_last = false;
-    #ifdef LIBPIPER_FULL_AUDIOCHUNK
-    chunk.phonemes = {};
-    chunk.phoneme_ids = {};
-    chunk.alignments = {};
-    #endif
-
-    if (this->phoneme_id_queue.empty()) {
-        // Empty final chunk
-        chunk.is_last = true;
-        return PIPER_DONE;
-    }
-
-    // Process next list of phoneme ids
-    auto [next_phonemes, next_ids] = std::move(this->phoneme_id_queue.front());
-    this->phoneme_id_queue.pop();
-
-    auto memoryInfo = Ort::MemoryInfo::CreateCpu(
-        OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
-
-    // Allocate
-    std::array<int64_t, 1> phoneme_id_lengths{(int64_t)next_ids.size()};
-    std::array<float, 3> scales{this->options.noise_scale, this->options.length_scale,
-                              this->options.noise_w_scale};
-
-    std::vector<Ort::Value> input_tensors;
-    input_tensors.reserve((this->num_speakers > 1) ? 5 : 4);
-    const std::array<int64_t, 2> phoneme_ids_shape{1, (int64_t)next_ids.size()};
-    input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
-        memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
-        phoneme_ids_shape.size()));
-
-    constexpr static std::array<int64_t, 1> phoneme_id_lengths_shape{
-        (int64_t)phoneme_id_lengths.size()};
-    input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
-        memoryInfo, phoneme_id_lengths.data(), phoneme_id_lengths.size(),
-        phoneme_id_lengths_shape.data(), phoneme_id_lengths_shape.size()));
-
-    static constexpr std::array<int64_t, 1> scales_shape{(int64_t)scales.size()};
-    input_tensors.emplace_back(Ort::Value::CreateTensor<float>(
-        memoryInfo, scales.data(), scales.size(), scales_shape.data(),
-        scales_shape.size()));
-
-    // Add speaker id.
-    // NOTE: These must be kept outside the "if" below to avoid being
-    // deallocated.
-    std::array<int64_t, 1> speaker_id{(int64_t)this->options.speaker_id};
-    static constexpr std::array<int64_t, 1> speaker_id_shape{(int64_t)speaker_id.size()};
-
-    if (this->num_speakers > 1) {
-        input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
-            memoryInfo, speaker_id.data(), speaker_id.size(),
-            speaker_id_shape.data(), speaker_id_shape.size()));
-    }
-
-    // From export_onnx.py
-    static constexpr std::array<const char *, 4> input_names = {"input", "input_lengths",
-                                               "scales", "sid"};
-
-    // Get all output names
-    const auto output_names_strs = this->session->GetOutputNames();
-    std::vector<const char *> output_names;
-    output_names.reserve(output_names_strs.size());
-    for (const auto &name : output_names_strs) {
-        output_names.push_back(name.c_str());
-    }
-
-    // Infer
-    auto output_tensors = this->session->Run(
-        Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
-        input_tensors.size(), output_names.data(), output_names.size());
-
-    if ((output_tensors.size() < 1) || (!output_tensors.front().IsTensor())) {
-        return PIPER_ERR_GENERIC;
-    }
-
-    auto audio_shape =
-        output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
-    const auto num_samples = audio_shape[audio_shape.size() - 1];
-
-    const float *audio_tensor_data = output_tensors.front().GetTensorData<float>();
-    this->chunk_samples.resize(num_samples);
-    std::copy(audio_tensor_data, audio_tensor_data + num_samples,
-              this->chunk_samples.begin());
-    chunk.samples = this->chunk_samples;
-
-    chunk.is_last = this->phoneme_id_queue.empty();
-
-    #ifdef LIBPIPER_FULL_AUDIOCHUNK
-    // Copy phonemes
-    this->chunk_phonemes = std::move(next_phonemes);
-    chunk.phonemes = this->chunk_phonemes;
-
-    // Copy phoneme ids
-    this->chunk_phoneme_ids.reserve(next_ids.size());
-    for (auto phoneme_id : next_ids) {
-        if (phoneme_id < std::numeric_limits<int>::min() ||
-            phoneme_id > std::numeric_limits<int>::max()) {
-            continue;
-        }
-        this->chunk_phoneme_ids.push_back(static_cast<int>(phoneme_id));
-    }
-
-    chunk.phoneme_ids = this->chunk_phoneme_ids;
-
-    // Check for alignments
-    if (output_tensors.size() > 1) {
-        auto alignments_shape =
-            output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
-
-        const auto num_alignments = alignments_shape[alignments_shape.size() - 1];
-        const float *alignments_tensor_data =
-            output_tensors[1].GetTensorData<float>();
-
-        this->chunk_alignments.resize(num_alignments);
-        for (std::size_t i = 0; i < num_alignments; ++i) {
-            this->chunk_alignments[i] =
-                (int)(alignments_tensor_data[i] * this->hop_length);
-        }
-
-        chunk.alignments = this->chunk_alignments;
-    }
-    #endif
-
-    return PIPER_OK;
+    return true;
 }
 
 }

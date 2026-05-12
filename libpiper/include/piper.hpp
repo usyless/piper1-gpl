@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <span>
 #include <stdbool.h>
 #include <stddef.h>
@@ -8,10 +9,14 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <queue>
+#include <array>
 #include <stdint.h>
 #include <string>
 #include <vector>
+
+#ifdef LIBPIPER_FULL_AUDIOCHUNK
+#include <limits>
+#endif
 
 #include <onnxruntime_cxx_api.h>
 
@@ -33,10 +38,6 @@
 #define CLAUSE_SEMICOLON (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 
 namespace piper {
-    constexpr inline int PIPER_OK = 0;
-    constexpr inline int PIPER_DONE = 1;
-    constexpr inline int PIPER_ERR_GENERIC = -1;
-
     using Phoneme = char32_t;
     using PhonemeId = int64_t;
     using SpeakerId = int64_t;
@@ -105,17 +106,17 @@ namespace piper {
         /**
         * \brief Raw samples returned from the voice model.
         */
-        std::span<const float> samples;
+        std::span<const float> samples{};
 
         /**
         * \brief Sample rate in Hertz.
         */
-        int sample_rate;
+        int sample_rate{0};
 
         /**
         * \brief True if this is the last audio chunk.
         */
-        bool is_last;
+        bool is_last{false};
 
         #ifdef LIBPIPER_FULL_AUDIOCHUNK
 
@@ -135,7 +136,7 @@ namespace piper {
         * 4. Advance your iterators in the phoneme id and alignment arrays by N
         * 5. Repeat
         */
-        std::span<const char32_t> phonemes;
+        std::span<const char32_t> phonemes{};
 
         /**
         * \brief Phoneme ids that produced this audio chunk.
@@ -145,7 +146,7 @@ namespace piper {
         * 1 = beginning of sentence
         * 2 = end of sentence
         */
-        std::span<const int> phoneme_ids;
+        std::vector<int> phoneme_ids{};
 
         /**
         * \brief Audio sample count for each phoneme id.
@@ -157,7 +158,7 @@ namespace piper {
         *
         * Use the phonemes array to align these sample counts with actual phonemes.
         */
-        std::span<const int> alignments;
+        std::vector<int> alignments{};
 
         #endif
     };
@@ -187,13 +188,7 @@ namespace piper {
         Ort::Env session_env;
 
         // synthesize state
-        std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>> phoneme_id_queue;
-        std::vector<float> chunk_samples;
-        #ifdef LIBPIPER_FULL_AUDIOCHUNK
-        std::vector<int> chunk_phoneme_ids;
-        std::vector<Phoneme> chunk_phonemes;
-        std::vector<int> chunk_alignments;
-        #endif
+        std::vector<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>> phoneme_id_queue;
 
         Synthesizer(const Synthesizer&) = delete;
         Synthesizer& operator=(const Synthesizer&) = delete;
@@ -201,6 +196,19 @@ namespace piper {
         Synthesizer& operator=(Synthesizer&&) noexcept = delete;
 
         Synthesizer() = default;
+
+    private:
+        /**
+        * \brief Start text-to-speech synthesis.
+        *
+        * \param synth Piper synthesizer.
+        *
+        * \param text text to synthesize into audio.
+        *
+        * \return true if success.
+        */
+        bool start(const std::string& text);
+    public:
 
         /**
         * \brief Create a Piper text-to-speech synthesizer from a voice model.
@@ -218,36 +226,138 @@ namespace piper {
         static std::unique_ptr<Synthesizer> create(const std::string& model_path, const std::string& config_path, const std::string& espeak_data_path, std::optional<Ort::SessionOptions> options = std::nullopt);
 
         /**
-        * \brief Start text-to-speech synthesis.
-        *
-        * \param synth Piper synthesizer.
+        * \brief Synthesize audio.
         *
         * \param text text to synthesize into audio.
         *
-        * \sa \ref Synthesizer::next
+        * \param callback callback invocable with const AudioChunk&, can optionally return false to stop early.
         *
-        * \return PIPER_OK or error code.
+        * \return true when complete or stopped early, false on error or otherwise.
         */
-        int start(const std::string& text);
+        template <std::invocable F>
+        requires (std::invocable<F&, const AudioChunk&>)
+        inline bool synthesize(const std::string& text, F&& callback) {
+            if (!start(text)) return false;
 
-        /**
-        * \brief Synthesize next chunk of audio.
-        *
-        * \param synth Piper synthesizer.
-        *
-        * \param chunk audio chunk to fill.
-        *
-        * piper_synthesize_start must be called before this function.
-        * Each call to piper_synthesize_next will fill the audio chunk, invalidating
-        * the memory of the previous chunk.
-        * The final audio chunk will have is_last = true.
-        * A return value of PIPER_DONE indicates that synthesis is complete.
-        *
-        * \sa \ref Synthesizer::start
-        *
-        * \return PIPER_DONE when complete, otherwise PIPER_OK or error code.
-        */
-        int next(AudioChunk& chunk);
+            struct cleanup {
+                Synthesizer* synth;
+                ~cleanup() {
+                    synth->phoneme_id_queue.clear();
+                }
+            } cleanup{this};
+
+            const auto phoneme_id_queue_size = this->phoneme_id_queue.size();
+
+            if (phoneme_id_queue_size == 0) {
+                std::invoke(callback, AudioChunk{.is_last = true});
+            }
+
+            auto memoryInfo = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
+
+            for (std::size_t i = 0; i < phoneme_id_queue_size; ++i) {
+                // Process next list of phoneme ids
+                auto& [next_phonemes, next_ids] = this->phoneme_id_queue[i];
+
+                // Allocate
+                std::array<int64_t, 1> phoneme_id_lengths{(int64_t)next_ids.size()};
+                std::array<float, 3> scales{this->options.noise_scale, this->options.length_scale,
+                                        this->options.noise_w_scale};
+
+                std::vector<Ort::Value> input_tensors;
+                input_tensors.reserve((this->num_speakers > 1) ? 5 : 4);
+                const std::array<int64_t, 2> phoneme_ids_shape{1, (int64_t)next_ids.size()};
+                input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
+                    memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
+                    phoneme_ids_shape.size()));
+
+                constexpr static std::array<int64_t, 1> phoneme_id_lengths_shape{
+                    (int64_t)phoneme_id_lengths.size()};
+                input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
+                    memoryInfo, phoneme_id_lengths.data(), phoneme_id_lengths.size(),
+                    phoneme_id_lengths_shape.data(), phoneme_id_lengths_shape.size()));
+
+                static constexpr std::array<int64_t, 1> scales_shape{(int64_t)scales.size()};
+                input_tensors.emplace_back(Ort::Value::CreateTensor<float>(
+                    memoryInfo, scales.data(), scales.size(), scales_shape.data(),
+                    scales_shape.size()));
+
+                // Add speaker id.
+                // NOTE: These must be kept outside the "if" below to avoid being
+                // deallocated.
+                std::array<int64_t, 1> speaker_id{(int64_t)this->options.speaker_id};
+                static constexpr std::array<int64_t, 1> speaker_id_shape{(int64_t)speaker_id.size()};
+
+                if (this->num_speakers > 1) {
+                    input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
+                        memoryInfo, speaker_id.data(), speaker_id.size(),
+                        speaker_id_shape.data(), speaker_id_shape.size()));
+                }
+
+                // From export_onnx.py
+                static constexpr std::array<const char *, 4> input_names = {"input", "input_lengths",
+                                                        "scales", "sid"};
+
+                // Get all output names
+                const auto output_names_strs = this->session->GetOutputNames();
+                std::vector<const char *> output_names;
+                output_names.reserve(output_names_strs.size());
+                for (const auto &name : output_names_strs) {
+                    output_names.push_back(name.c_str());
+                }
+
+                // Infer
+                auto output_tensors = this->session->Run(
+                    Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
+                    input_tensors.size(), output_names.data(), output_names.size());
+
+                if ((output_tensors.size() < 1) || (!output_tensors.front().IsTensor())) {
+                    return false;
+                }
+
+                auto audio_shape = output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
+                const auto num_samples = audio_shape[audio_shape.size() - 1];
+
+                const float *audio_tensor_data = output_tensors.front().GetTensorData<float>();
+                AudioChunk chunk{
+                    .samples = {audio_tensor_data, audio_tensor_data + num_samples},
+                    .sample_rate = this->sample_rate,
+                    .is_last = (i == (phoneme_id_queue_size - 1)),
+                };
+
+                #ifdef LIBPIPER_FULL_AUDIOCHUNK
+                chunk.phonemes = next_phonemes;
+
+                // Copy phoneme ids
+                chunk.phoneme_ids.reserve(next_ids.size());
+                for (auto phoneme_id : next_ids) {
+                    if (phoneme_id < std::numeric_limits<int>::min() ||
+                        phoneme_id > std::numeric_limits<int>::max()) {
+                        continue;
+                    }
+                    chunk.phoneme_ids.push_back(static_cast<int>(phoneme_id));
+                }
+
+                // Check for alignments
+                if (output_tensors.size() > 1) {
+                    auto alignments_shape =
+                        output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+
+                    const auto num_alignments = alignments_shape[alignments_shape.size() - 1];
+                    const float *alignments_tensor_data =
+                        output_tensors[1].GetTensorData<float>();
+
+                    chunk.alignments.resize(num_alignments);
+                    for (std::size_t i = 0; i < num_alignments; ++i) {
+                        chunk.alignments[i] = (int)(alignments_tensor_data[i] * this->hop_length);
+                    }
+                }
+                #endif
+
+                std::invoke(callback, chunk);
+            }
+
+            return true;
+        }
 
         ~Synthesizer();
     };
