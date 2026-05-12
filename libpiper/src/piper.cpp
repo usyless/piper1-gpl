@@ -116,13 +116,10 @@ Synthesizer::~Synthesizer() {
     espeak_Terminate();
 }
 
-bool Synthesizer::start(const std::string& text) {
+bool Synthesizer::start(const std::string& text, phoneme_id_queue_t& phoneme_id_queue) {
     if (espeak_SetVoiceByName(espeak_voice.c_str()) != EE_OK) {
         return false;
     }
-
-    // Clear state
-    this->phoneme_id_queue.clear();
 
     // phonemize
     std::vector<std::string> sentence_phonemes{""};
@@ -222,7 +219,7 @@ bool Synthesizer::start(const std::string& text) {
         sentence_ids.push_back(ID_EOS);
         sentence_codepoints.push_back(PHONEME_SEPARATOR);
 
-        this->phoneme_id_queue.emplace_back(sentence_codepoints, std::move(sentence_ids));
+        phoneme_id_queue.emplace_back(sentence_codepoints, std::move(sentence_ids));
     }
 
     return true;

@@ -186,7 +186,7 @@ namespace piper {
         Ort::SessionOptions session_options;
 
         // synthesize state
-        std::vector<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>> phoneme_id_queue;
+        using phoneme_id_queue_t = std::vector<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>;
 
         Synthesizer(const Synthesizer&) = delete;
         Synthesizer& operator=(const Synthesizer&) = delete;
@@ -199,13 +199,13 @@ namespace piper {
         /**
         * \brief Start text-to-speech synthesis.
         *
-        * \param synth Piper synthesizer.
-        *
         * \param text text to synthesize into audio.
+        *
+        * \param phoneme_id_queue phoneme id queue to populate.
         *
         * \return true if success.
         */
-        bool start(const std::string& text);
+        bool start(const std::string& text, phoneme_id_queue_t& phoneme_id_queue);
     public:
 
         /**
@@ -235,16 +235,10 @@ namespace piper {
         template <std::invocable F>
         requires (std::invocable<F&, const AudioChunk&>)
         inline bool synthesize(const std::string& text, F&& callback) {
-            if (!start(text)) return false;
+            phoneme_id_queue_t phoneme_id_queue;
+            if (!start(text, phoneme_id_queue)) return false;
 
-            struct cleanup {
-                Synthesizer* synth;
-                ~cleanup() {
-                    synth->phoneme_id_queue.clear();
-                }
-            } cleanup{this};
-
-            const auto phoneme_id_queue_size = this->phoneme_id_queue.size();
+            const auto phoneme_id_queue_size = phoneme_id_queue.size();
 
             if (phoneme_id_queue_size == 0) {
                 std::invoke(callback, AudioChunk{.is_last = true});
@@ -254,7 +248,7 @@ namespace piper {
 
             for (std::size_t i = 0; i < phoneme_id_queue_size; ++i) {
                 // Process next list of phoneme ids
-                auto& [next_phonemes, next_ids] = this->phoneme_id_queue[i];
+                auto& [next_phonemes, next_ids] = phoneme_id_queue[i];
 
                 // Allocate
                 std::array<int64_t, 1> phoneme_id_lengths{(int64_t)next_ids.size()};
@@ -346,6 +340,8 @@ namespace piper {
                 } else {
                     std::invoke(callback, chunk);
                 }
+
+                phoneme_id_queue[i] = {};
             }
 
             return true;
