@@ -246,6 +246,11 @@ namespace piper {
 
             auto memoryInfo = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
+            std::vector<Ort::Value> input_tensors;
+            input_tensors.reserve((this->num_speakers > 1) ? 5 : 4);
+
+            std::vector<const char *> output_names;
+
             for (std::size_t i = 0; i < phoneme_id_queue_size; ++i) {
                 // Process next list of phoneme ids
                 auto& [next_phonemes, next_ids] = phoneme_id_queue[i];
@@ -255,8 +260,8 @@ namespace piper {
                 std::array<float, 3> scales{this->options.noise_scale, this->options.length_scale,
                                         this->options.noise_w_scale};
 
-                std::vector<Ort::Value> input_tensors;
-                input_tensors.reserve((this->num_speakers > 1) ? 5 : 4);
+                input_tensors.clear();
+
                 const std::array<int64_t, 2> phoneme_ids_shape{1, (int64_t)next_ids.size()};
                 input_tensors.emplace_back(Ort::Value::CreateTensor<int64_t>(
                     memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
@@ -291,7 +296,7 @@ namespace piper {
 
                 // Get all output names
                 const auto output_names_strs = this->session->GetOutputNames();
-                std::vector<const char *> output_names;
+                output_names.clear();
                 output_names.reserve(output_names_strs.size());
                 for (const auto &name : output_names_strs) {
                     output_names.push_back(name.c_str());
