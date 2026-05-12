@@ -136,7 +136,7 @@ namespace piper {
         * 4. Advance your iterators in the phoneme id and alignment arrays by N
         * 5. Repeat
         */
-        std::span<const char32_t> phonemes{};
+        std::span<const Phoneme> phonemes{};
 
         /**
         * \brief Phoneme ids that produced this audio chunk.
@@ -146,7 +146,7 @@ namespace piper {
         * 1 = beginning of sentence
         * 2 = end of sentence
         */
-        std::vector<int> phoneme_ids{};
+        std::span<const PhonemeId> phoneme_ids{};
 
         /**
         * \brief Audio sample count for each phoneme id.
@@ -314,7 +314,7 @@ namespace piper {
                     return false;
                 }
 
-                auto audio_shape = output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
+                const auto audio_shape = output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
                 const auto num_samples = audio_shape[audio_shape.size() - 1];
 
                 const float *audio_tensor_data = output_tensors.front().GetTensorData<float>();
@@ -322,29 +322,19 @@ namespace piper {
                     .samples = {audio_tensor_data, audio_tensor_data + num_samples},
                     .sample_rate = this->sample_rate,
                     .is_last = (i == (phoneme_id_queue_size - 1)),
+                    #ifdef LIBPIPER_FULL_AUDIOCHUNK
+                    .phonemes = next_phonemes,
+                    .phoneme_ids = next_ids,
+                    #endif
                 };
 
                 #ifdef LIBPIPER_FULL_AUDIOCHUNK
-                chunk.phonemes = next_phonemes;
-
-                // Copy phoneme ids
-                chunk.phoneme_ids.reserve(next_ids.size());
-                for (auto phoneme_id : next_ids) {
-                    if (phoneme_id < std::numeric_limits<int>::min() ||
-                        phoneme_id > std::numeric_limits<int>::max()) {
-                        continue;
-                    }
-                    chunk.phoneme_ids.push_back(static_cast<int>(phoneme_id));
-                }
-
                 // Check for alignments
                 if (output_tensors.size() > 1) {
-                    auto alignments_shape =
-                        output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+                    const auto alignments_shape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
 
                     const auto num_alignments = alignments_shape[alignments_shape.size() - 1];
-                    const float *alignments_tensor_data =
-                        output_tensors[1].GetTensorData<float>();
+                    const float *alignments_tensor_data = output_tensors[1].GetTensorData<float>();
 
                     chunk.alignments.resize(num_alignments);
                     for (std::size_t i = 0; i < num_alignments; ++i) {
