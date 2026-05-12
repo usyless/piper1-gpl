@@ -59,6 +59,9 @@ int main() {
     // Change options under synth->options before calling start
 
     synth->options.speaker_id = 1;
+    
+    // set default options for this model
+    // synth->set_default_options();
 
     synth->synthesize("Random speech text", [](const piper::AudioChunk& chunk) {
         audio_stream.write(reinterpret_cast<const char *>(chunk.samples.data()),

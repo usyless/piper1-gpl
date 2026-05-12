@@ -28,6 +28,7 @@ using json = nlohmann::json;
 
 std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, const std::string& config_path, const std::string& espeak_data_path, std::optional<Ort::SessionOptions> options) {
     try {
+    
     if (model_path.empty()) {
         return nullptr;
     }
@@ -80,17 +81,19 @@ std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, 
         // Overrides default inference settings
         const auto& inference_value = config.at("inference");
         if (inference_value.contains("noise_scale")) {
-            inference_value.at("noise_scale").get_to(synth.options.noise_scale);
+            inference_value.at("noise_scale").get_to(synth.default_options.noise_scale);
         }
 
         if (inference_value.contains("length_scale")) {
-            inference_value.at("length_scale").get_to(synth.options.length_scale);
+            inference_value.at("length_scale").get_to(synth.default_options.length_scale);
         }
 
         if (inference_value.contains("noise_w")) {
-            inference_value.at("noise_w").get_to(synth.options.noise_w_scale);
+            inference_value.at("noise_w").get_to(synth.default_options.noise_w_scale);
         }
     }
+
+    synth.set_default_options();
 
     if (options) {
         synth.session_options = std::move(*options);
@@ -107,6 +110,7 @@ std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, 
     synth.session = std::make_unique<Ort::Session>(ort_env, model_path.c_str(), synth.session_options);
 
     return synth_ptr;
+
     } catch (...) {
         return nullptr;
     }

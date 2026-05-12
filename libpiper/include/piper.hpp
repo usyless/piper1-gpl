@@ -174,12 +174,16 @@ namespace piper {
         PhonemeIdMap phoneme_id_map;
         int hop_length = DEFAULT_HOP_LENGTH;
 
-        SynthesizerOptions options {
+        SynthesizerOptions options;
+
+    private:
+        SynthesizerOptions default_options {
             .speaker_id = 0,
             .length_scale = DEFAULT_LENGTH_SCALE,
             .noise_scale = DEFAULT_NOISE_SCALE,
             .noise_w_scale = DEFAULT_NOISE_W_SCALE
         };
+    public:
 
         // onnx
         std::unique_ptr<Ort::Session> session;
@@ -216,12 +220,20 @@ namespace piper {
         * \param config_path path to JSON voice config file or NULL if it's the
         * model_path + .json.
         *
-        * \param espeak_data_path path to the espeak-ng data
-        * directory.
+        * \param espeak_data_path path to the espeak-ng data directory.
+        *
+        * \param options optional Ort::SessionOptions to use instead of the defaults.
         *
         * \return a Piper text-to-speech synthesizer for the voice model.
         */
         static std::unique_ptr<Synthesizer> create(const std::string& model_path, const std::string& config_path, const std::string& espeak_data_path, std::optional<Ort::SessionOptions> options = std::nullopt);
+
+        /**
+        * \brief Set default options for the current model.
+        */
+        inline void set_default_options() {
+            options = default_options;
+        }
 
         /**
         * \brief Synthesize audio.
