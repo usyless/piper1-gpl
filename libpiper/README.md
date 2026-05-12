@@ -60,13 +60,11 @@ int main() {
 
     synth->options.speaker_id = 1;
 
-    if (synth->start("Random speech text") != piper::PIPER_OK) return 1;
-
-    piper::AudioChunk chunk;
-    while (synth->next(chunk) != piper::PIPER_DONE) {
+    synth->synthesize("Random speech text", [](const piper::AudioChunk& chunk) {
         audio_stream.write(reinterpret_cast<const char *>(chunk.samples.data()),
                            chunk.samples.size() * sizeof(float));
-    }
+        // return false; // this would stop the synthesizer after the first callback
+    });
 
     // synth automatically cleared up when it goes out of scope
     return 0;
