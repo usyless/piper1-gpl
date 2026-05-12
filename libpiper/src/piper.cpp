@@ -363,15 +363,6 @@ int Synthesizer::next(AudioChunk& chunk) {
         chunk.alignments = this->chunk_alignments;
     }
 
-    // Clean up
-    for (auto& tensor : output_tensors) {
-        Ort::detail::OrtRelease(tensor.release());
-    }
-
-    for (auto& tensor : input_tensors) {
-        Ort::detail::OrtRelease(tensor.release());
-    }
-
     return PIPER_OK;
 }
 
