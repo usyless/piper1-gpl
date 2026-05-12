@@ -254,6 +254,7 @@ namespace piper {
 
             if (phoneme_id_queue_size == 0) {
                 std::invoke(callback, AudioChunk{.is_last = true});
+                return true;
             }
 
             auto memoryInfo = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
