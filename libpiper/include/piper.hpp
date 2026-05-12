@@ -232,7 +232,7 @@ namespace piper {
         *
         * \return true when complete or stopped early, false on error or otherwise.
         */
-        template <std::invocable F>
+        template <typename F>
         requires (std::invocable<F&, const AudioChunk&>)
         inline bool synthesize(const std::string& text, F&& callback) {
             phoneme_id_queue_t phoneme_id_queue;
