@@ -164,6 +164,7 @@ bool Synthesizer::start(const std::string& text, phoneme_id_queue_t& phoneme_id_
     // phonemes to ids
     std::vector<Phoneme> sentence_codepoints;
     std::vector<PhonemeId> sentence_ids;
+    phoneme_id_queue.reserve(sentence_phonemes.size());
     for (auto &phonemes_str : sentence_phonemes) {
         if (phonemes_str.empty()) {
             continue;
