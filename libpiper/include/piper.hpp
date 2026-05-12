@@ -117,6 +117,8 @@ namespace piper {
         */
         bool is_last;
 
+        #ifdef LIBPIPER_FULL_AUDIOCHUNK
+
         /**
         * \brief Phoneme codepoints that produced this audio chunk, aligned with ids.
         *
@@ -156,6 +158,8 @@ namespace piper {
         * Use the phonemes array to align these sample counts with actual phonemes.
         */
         std::span<const int> alignments;
+
+        #endif
     };
 
     /**
@@ -185,9 +189,11 @@ namespace piper {
         // synthesize state
         std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>> phoneme_id_queue;
         std::vector<float> chunk_samples;
+        #ifdef LIBPIPER_FULL_AUDIOCHUNK
         std::vector<int> chunk_phoneme_ids;
         std::vector<Phoneme> chunk_phonemes;
         std::vector<int> chunk_alignments;
+        #endif
 
         Synthesizer(const Synthesizer&) = delete;
         Synthesizer& operator=(const Synthesizer&) = delete;

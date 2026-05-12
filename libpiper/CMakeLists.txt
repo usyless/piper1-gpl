@@ -5,6 +5,12 @@ project(piper LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(LIBPIPER_FULL_AUDIOCHUNK
+    ON
+    CACHE BOOL
+    "Enable the full audio chunk struct"
+)
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -30,8 +36,8 @@ FetchContent_MakeAvailable(espeak_ng_external)
 add_compile_definitions(_FILE_OFFSET_BITS=64)
 
 include_directories(
-    ${espeak_ng_external_SOURCE_DIR}/src/include
-    ${espeak_ng_external_SOURCE_DIR}/src/ucd-tools/src/include
+    "${espeak_ng_external_SOURCE_DIR}/src/include"
+    "${espeak_ng_external_SOURCE_DIR}/src/ucd-tools/src/include"
 )
 
 # ---- onnxruntime ---
@@ -97,20 +103,26 @@ endif()
 
 # ---- libpiper ---
 
-add_library(piper STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
+add_library(${PROJECT_NAME} STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp"
 )
 
-target_include_directories(piper PUBLIC
-    ${ONNXRUNTIME_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+if (LIBPIPER_FULL_AUDIOCHUNK)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC 
+        LIBPIPER_FULL_AUDIOCHUNK
+    )
+endif()
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+    "${ONNXRUNTIME_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-target_link_directories(piper PUBLIC
-    ${ONNXRUNTIME_DIR}/lib
+target_link_directories(${PROJECT_NAME} PUBLIC
+    "${ONNXRUNTIME_DIR}/lib"
 )
 
-target_link_libraries(piper
+target_link_libraries(${PROJECT_NAME}
     espeak-ng
     ucd
     onnxruntime

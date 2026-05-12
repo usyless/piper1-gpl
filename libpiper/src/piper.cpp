@@ -238,15 +238,20 @@ int Synthesizer::start(const std::string& text) {
 int Synthesizer::next(AudioChunk& chunk) {
     // Clear data from previous call
     this->chunk_samples.clear();
+    #ifdef LIBPIPER_FULL_AUDIOCHUNK
     this->chunk_phonemes.clear();
     this->chunk_phoneme_ids.clear();
     this->chunk_alignments.clear();
+    #endif
 
     chunk.sample_rate = this->sample_rate;
     chunk.samples = {};
     chunk.is_last = false;
+    #ifdef LIBPIPER_FULL_AUDIOCHUNK
+    chunk.phonemes = {};
     chunk.phoneme_ids = {};
     chunk.alignments = {};
+    #endif
 
     if (this->phoneme_id_queue.empty()) {
         // Empty final chunk
@@ -329,6 +334,7 @@ int Synthesizer::next(AudioChunk& chunk) {
 
     chunk.is_last = this->phoneme_id_queue.empty();
 
+    #ifdef LIBPIPER_FULL_AUDIOCHUNK
     // Copy phonemes
     this->chunk_phonemes = std::move(next_phonemes);
     chunk.phonemes = this->chunk_phonemes;
@@ -362,6 +368,7 @@ int Synthesizer::next(AudioChunk& chunk) {
 
         chunk.alignments = this->chunk_alignments;
     }
+    #endif
 
     return PIPER_OK;
 }

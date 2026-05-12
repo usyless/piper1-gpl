@@ -35,6 +35,11 @@ add_custom_command(TARGET ${PROJECT_NAME}
 )
 ```
 
+To only keep samples within the `piper::AudioChunk` and not do unnecessary work set the following line in your `CMakeLists.txt` before the `FetchContent_MakeAvailable(libpiper)`
+```cmake
+set(LIBPIPER_FULL_AUDIOCHUNK OFF CACHE BOOL "" FORCE)
+```
+
 ## Example
 
 ```c++
