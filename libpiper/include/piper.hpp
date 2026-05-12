@@ -183,9 +183,7 @@ namespace piper {
 
         // onnx
         std::unique_ptr<Ort::Session> session;
-        Ort::AllocatorWithDefaultOptions session_allocator;
         Ort::SessionOptions session_options;
-        Ort::Env session_env;
 
         // synthesize state
         std::vector<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>> phoneme_id_queue;
