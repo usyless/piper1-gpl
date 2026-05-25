@@ -174,13 +174,19 @@ bool Synthesizer::start(const std::string& text, phoneme_id_queue_t& phoneme_id_
             continue;
         }
 
+        #ifdef LIBPIPER_FULL_AUDIOCHUNK
         sentence_codepoints.push_back(PHONEME_BOS);
+        #endif
         sentence_ids.push_back(ID_BOS);
 
+        #ifdef LIBPIPER_FULL_AUDIOCHUNK
         sentence_codepoints.push_back(PHONEME_BOS);
+        #endif
         sentence_ids.push_back(ID_PAD);
 
+        #ifdef LIBPIPER_FULL_AUDIOCHUNK
         sentence_codepoints.push_back(PHONEME_SEPARATOR);
+        #endif
 
         auto phonemes_norm = una::norm::to_nfd_utf8(phonemes_str);
         auto phonemes_range = una::ranges::utf8_view{phonemes_norm};
@@ -206,13 +212,19 @@ bool Synthesizer::start(const std::string& text, phoneme_id_queue_t& phoneme_id_
                 auto ids_for_phoneme = this->phoneme_id_map.find(phoneme);
                 if (ids_for_phoneme != this->phoneme_id_map.end()) {
                     for (auto id : ids_for_phoneme->second) {
+                        #ifdef LIBPIPER_FULL_AUDIOCHUNK
                         sentence_codepoints.push_back(phoneme);
+                        #endif
                         sentence_ids.push_back(id);
 
+                        #ifdef LIBPIPER_FULL_AUDIOCHUNK
                         sentence_codepoints.push_back(phoneme);
+                        #endif
                         sentence_ids.push_back(ID_PAD);
 
+                        #ifdef LIBPIPER_FULL_AUDIOCHUNK
                         sentence_codepoints.push_back(PHONEME_SEPARATOR);
+                        #endif
                     }
                 }
             }
@@ -220,9 +232,13 @@ bool Synthesizer::start(const std::string& text, phoneme_id_queue_t& phoneme_id_
             phonemes_iter++;
         }
 
+        #ifdef LIBPIPER_FULL_AUDIOCHUNK
         sentence_codepoints.push_back(PHONEME_EOS);
+        #endif
         sentence_ids.push_back(ID_EOS);
+        #ifdef LIBPIPER_FULL_AUDIOCHUNK
         sentence_codepoints.push_back(PHONEME_SEPARATOR);
+        #endif
 
         phoneme_id_queue.emplace_back(sentence_codepoints, std::move(sentence_ids));
     }
