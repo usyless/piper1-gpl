@@ -23,19 +23,19 @@ if (NOT LIBPIPER_USE_BUNDLED_ONNXRUNTIME)
     set(LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS
         ""
         CACHE STRING
-        "Include directories for non-bundled onnxruntime"
+        "Include directories for non-bundled onnxruntime, make sure to be semicolon separated"
     )
 
     set(LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS
         ""
         CACHE STRING
-        "Library directories for non-bundled onnxruntime"
+        "Library directories for non-bundled onnxruntime, make sure to be semicolon separated"
     )
 
     set(LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES
         ""
         CACHE STRING
-        "Files to link for non-bundled onnxruntime"
+        "Files to link for non-bundled onnxruntime, make sure to be semicolon separated"
     )
 
     if (DEFINED CACHE{LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS} AND
@@ -183,19 +183,11 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 else()
 
-string(REPLACE " " ";" LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS_LIST "${LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS}")
-
-target_include_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS_LIST})
-
-string(REPLACE " " ";" LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS_LIST "${LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS}")
-
-target_link_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS_LIST})
-
-string(REPLACE " " ";" LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES_LIST "${LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES}")
-
+target_include_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS})
+target_link_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC
     -Wl,--start-group
-    ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES_LIST}
+    ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES}
     -Wl,--end-group
 )
 
