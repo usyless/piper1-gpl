@@ -11,6 +11,48 @@ set(LIBPIPER_FULL_AUDIOCHUNK
     "Enable the full audio chunk struct"
 )
 
+set(LIBPIPER_USE_BUNDLED_ONNXRUNTIME
+    ON
+    CACHE BOOL
+    "Use the bundled onnxruntime, which is downloaded from microsoft or synesthesiam for arm32.
+    Mainly only disable this if trying to link onnxruntime statically, if dynamic just define ONNXRUNTIME_DIR.
+    If disabled, make sure to set LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS, LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS and LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES"
+)
+
+if (NOT LIBPIPER_USE_BUNDLED_ONNXRUNTIME)
+    set(LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS
+        ""
+        CACHE STRING
+        "Include directories for non-bundled onnxruntime"
+    )
+
+    set(LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS
+        ""
+        CACHE STRING
+        "Library directories for non-bundled onnxruntime"
+    )
+
+    set(LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES
+        ""
+        CACHE STRING
+        "Files to link for non-bundled onnxruntime"
+    )
+
+    if (DEFINED CACHE{LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS} AND
+        DEFINED CACHE{LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS} AND
+        DEFINED CACHE{LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES})
+
+        if ("${LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS}" STREQUAL "" OR
+            "${LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS}" STREQUAL "" OR
+            "${LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES}" STREQUAL "")
+            
+            message(FATAL_ERROR "Non-bundled ONNXRuntime requires LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS, LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS, and LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES to be set and non-empty!")
+        endif()
+    else()
+        message(FATAL_ERROR "Missing one or more required non-bundled ONNXRuntime cache variables.")
+    endif()
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -40,7 +82,14 @@ include_directories(
     "${espeak_ng_external_SOURCE_DIR}/src/ucd-tools/src/include"
 )
 
+target_link_libraries(${PROJECT_NAME}
+    espeak-ng
+    ucd
+)
+
 # ---- onnxruntime ---
+
+if (LIBPIPER_USE_BUNDLED_ONNXRUNTIME)
 
 # Look for onnxruntime files in <root>/lib
 if(NOT DEFINED ONNXRUNTIME_DIR)
@@ -126,7 +175,13 @@ target_link_directories(${PROJECT_NAME} PUBLIC
 )
 
 target_link_libraries(${PROJECT_NAME}
-    espeak-ng
-    ucd
     onnxruntime
 )
+
+else()
+
+target_include_directories(${PROJECT_NAME} PUBLIC LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS)
+target_link_directories(${PROJECT_NAME} PUBLIC LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS)
+target_link_libraries(${PROJECT_NAME} PUBLIC LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES)
+
+endif()
