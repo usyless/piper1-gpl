@@ -87,6 +87,25 @@ target_link_libraries(${PROJECT_NAME}
     ucd
 )
 
+# ---- libpiper ------
+
+add_library(${PROJECT_NAME} STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp"
+)
+
+if (LIBPIPER_FULL_AUDIOCHUNK)
+    message(STATUS "Using the full piper::AudioChunk as set by LIBPIPER_FULL_AUDIOCHUNK")
+    target_compile_definitions(${PROJECT_NAME} PUBLIC 
+        LIBPIPER_FULL_AUDIOCHUNK
+    )
+else()
+    message(STATUS "Ignoring the full piper::AudioChunk as set by LIBPIPER_FULL_AUDIOCHUNK")
+endif()
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 # ---- onnxruntime ---
 
 if (LIBPIPER_USE_BUNDLED_ONNXRUNTIME)
@@ -150,24 +169,8 @@ if(NOT DEFINED ONNXRUNTIME_DIR)
     endif()
 endif()
 
-# ---- libpiper ---
-
-add_library(${PROJECT_NAME} STATIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp"
-)
-
-if (LIBPIPER_FULL_AUDIOCHUNK)
-    message(STATUS "Using the full piper::AudioChunk as set by LIBPIPER_FULL_AUDIOCHUNK")
-    target_compile_definitions(${PROJECT_NAME} PUBLIC 
-        LIBPIPER_FULL_AUDIOCHUNK
-    )
-else()
-    message(STATUS "Ignoring the full piper::AudioChunk as set by LIBPIPER_FULL_AUDIOCHUNK")
-endif()
-
 target_include_directories(${PROJECT_NAME} PUBLIC
     "${ONNXRUNTIME_DIR}/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 target_link_directories(${PROJECT_NAME} PUBLIC
