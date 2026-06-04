@@ -180,8 +180,12 @@ target_link_libraries(${PROJECT_NAME}
 
 else()
 
-target_include_directories(${PROJECT_NAME} PUBLIC LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS)
-target_link_directories(${PROJECT_NAME} PUBLIC LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS)
-target_link_libraries(${PROJECT_NAME} PUBLIC LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES)
+target_include_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS})
+target_link_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS})
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    -Wl,--start-group
+    ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES}
+    -Wl,--end-group
+)
 
 endif()
