@@ -82,11 +82,6 @@ include_directories(
     "${espeak_ng_external_SOURCE_DIR}/src/ucd-tools/src/include"
 )
 
-target_link_libraries(${PROJECT_NAME}
-    espeak-ng
-    ucd
-)
-
 # ---- libpiper ------
 
 add_library(${PROJECT_NAME} STATIC
@@ -104,6 +99,11 @@ endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+target_link_libraries(${PROJECT_NAME}
+    espeak-ng
+    ucd
 )
 
 # ---- onnxruntime ---
