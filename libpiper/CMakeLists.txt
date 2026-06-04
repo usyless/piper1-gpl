@@ -101,7 +101,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME} PUBLIC
     espeak-ng
     ucd
 )
@@ -177,7 +177,7 @@ target_link_directories(${PROJECT_NAME} PUBLIC
     "${ONNXRUNTIME_DIR}/lib"
 )
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME} PUBLIC
     onnxruntime
 )
 
