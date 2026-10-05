@@ -9,7 +9,10 @@
 
 #include <espeak-ng/speak_lib.h>
 
-static Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "piper"};
+inline Ort::Env& get_ort_env() {
+    static Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "piper"};
+    return env;
+}
 
 namespace piper {
 
@@ -107,7 +110,7 @@ std::unique_ptr<Synthesizer> Synthesizer::create(const std::string& model_path, 
         synth.session_options.SetIntraOpNumThreads((int)std::thread::hardware_concurrency());
     }
 
-    synth.session = std::make_unique<Ort::Session>(ort_env, model_path.c_str(), synth.session_options);
+    synth.session = std::make_unique<Ort::Session>(get_ort_env(), model_path.c_str(), synth.session_options);
 
     return synth_ptr;
 

@@ -186,9 +186,9 @@ else()
 target_include_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_INCLUDE_DIRS})
 target_link_directories(${PROJECT_NAME} PUBLIC ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC
-    -Wl,--start-group
+    -Wl,--whole-archive
     ${LIBPIPER_ONNXRUNTIME_TARGET_LINK_FILES}
-    -Wl,--end-group
+    -Wl,--no-whole-archive
 )
 
 endif()
